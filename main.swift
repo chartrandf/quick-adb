@@ -1,5 +1,6 @@
 import Cocoa
 import SwiftUI
+import ServiceManagement
 import UniformTypeIdentifiers
 
 // MARK: - Shell
@@ -403,6 +404,8 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate {
         shotItem.submenu?.delegate = self
         screenshotMenu = shotItem.submenu
         menu.addItem(.separator())
+        loginItem = menu.addItem(withTitle: "Launch at login", action: #selector(toggleLaunchAtLogin), keyEquivalent: "")
+        menu.delegate = self
         menu.addItem(withTitle: "Quit", action: #selector(NSApplication.terminate(_:)), keyEquivalent: "q")
         statusItem.menu = menu
 
@@ -412,6 +415,12 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate {
             self?.install()
         }
         statusWindow.title = "Drop an APK here"
+    }
+
+    // Opening the app again (Spotlight, Finder) while it runs shows the window.
+    func applicationShouldHandleReopen(_ sender: NSApplication, hasVisibleWindows flag: Bool) -> Bool {
+        showWindow()
+        return false
     }
 
     // Highlight the button while an APK is dragged over it.
@@ -468,8 +477,14 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate {
 
     let logRanges = [1, 2, 3, 4, 5, 10, 15, 30]
     var screenshotMenu: NSMenu?
+    var loginItem: NSMenuItem?
 
     func menuNeedsUpdate(_ menu: NSMenu) {
+        // Main menu: only refresh the login checkmark.
+        if menu === statusItem.menu {
+            loginItem?.state = SMAppService.mainApp.status == .enabled ? .on : .off
+            return
+        }
         menu.removeAllItems()
         let devices = findAdb().map(connectedDevices) ?? []
         guard !devices.isEmpty else {
@@ -550,6 +565,22 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate {
                 self.flash("📸")
                 NSWorkspace.shared.activateFileViewerSelecting([file])
             }
+        }
+    }
+
+    @objc func toggleLaunchAtLogin() {
+        do {
+            if SMAppService.mainApp.status == .enabled {
+                try SMAppService.mainApp.unregister()
+            } else {
+                try SMAppService.mainApp.register()
+            }
+        } catch {
+            let alert = NSAlert()
+            alert.messageText = "Could not change Launch at login"
+            alert.informativeText = "\(error.localizedDescription)\n\nMove Quick ADB to /Applications (./build.sh install) and try again."
+            NSApp.activate()
+            alert.runModal()
         }
     }
 
