@@ -1,12 +1,11 @@
-<p align="center"><img src="docs/icon.png" width="128" alt="Quick ADB icon"></p>
-
 # Quick ADB
-
-A tiny macOS menu bar app to push APKs to an Android phone. Drop an APK on the ant, it lands on the phone and opens.
 
 <p align="center">
   <img src="docs/window-idle.png" width="420" alt="Quick ADB window, waiting for an APK">
 </p>
+
+A tiny macOS menu bar app to push APKs to an Android phone. Drop an APK on the ant, it lands on the phone and opens.
+
 
 ## Features
 
@@ -53,7 +52,7 @@ To share it, `./build.sh dmg` makes `QuickADB.dmg`: open it and drag Quick ADB o
 
 **Launch at login**: toggle it from the menu.
 
-## Build
+## Build From Source
 
 ```sh
 ./build.sh           # QuickADB.app in this folder
