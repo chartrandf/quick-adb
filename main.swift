@@ -193,7 +193,7 @@ struct StatusView: View {
             Button("", action: onClose).keyboardShortcut(.cancelAction).hidden().frame(height: 0)
         }
         .padding(.horizontal, 20)
-        .padding(.bottom, 16)
+        .padding(.bottom, 20)
         .frame(width: 440)
         .background(
             LinearGradient(colors: [Color(nsColor: .windowBackgroundColor), Color(nsColor: .controlBackgroundColor)],
@@ -324,6 +324,7 @@ final class StatusWindow: NSObject {
                                                             onClose: { [weak self] in self?.close() },
                                                             onDrop: { [weak self] in self?.onDrop?($0) }))
         host.sizingOptions = .preferredContentSize // window follows the SwiftUI size
+        host.safeAreaRegions = [] // top padding already clears the transparent title bar
         window.contentViewController = host
     }
 

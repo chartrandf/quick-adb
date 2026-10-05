@@ -4,7 +4,6 @@ A tiny macOS menu bar app to push APKs to an Android phone. Drop an APK on the a
 
 <p align="center">
   <img src="docs/window-idle.png" width="420" alt="Quick ADB window, waiting for an APK">
-  <img src="docs/window-drop.png" width="420" alt="Dropping an APK on the window">
 </p>
 
 ## Features
@@ -19,16 +18,6 @@ A tiny macOS menu bar app to push APKs to an Android phone. Drop an APK on the a
 - **Take screenshot**: saves the phone screen as a PNG on the Desktop.
 - Devices show by name (e.g. *Google Pixel 8a*), not by serial.
 
-<p align="center">
-  <img src="docs/window-installing.png" width="420" alt="Installing, with details">
-  <img src="docs/window-success.png" width="420" alt="Installed">
-</p>
-
-The **Details** panel shows every command run, its output, exit code and duration, so a failed install is easy to debug.
-
-<p align="center">
-  <img src="docs/window-no-device.png" width="420" alt="No device connected">
-</p>
 
 ## Menu
 
