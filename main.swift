@@ -396,17 +396,28 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate {
         menu.addItem(withTitle: "Install APK…", action: #selector(pickApk), keyEquivalent: "o")
         menu.addItem(withTitle: "Show window", action: #selector(showWindow), keyEquivalent: "")
         menu.addItem(.separator())
-        let logItem = menu.addItem(withTitle: "Capture log", action: nil, keyEquivalent: "")
-        logItem.submenu = NSMenu()
-        logItem.submenu?.delegate = self
-        let shotItem = menu.addItem(withTitle: "Take screenshot", action: nil, keyEquivalent: "")
-        shotItem.submenu = NSMenu()
-        shotItem.submenu?.delegate = self
-        screenshotMenu = shotItem.submenu
+        logItem = menu.addItem(withTitle: "Capture log", action: nil, keyEquivalent: "")
+        logItem?.submenu = NSMenu()
+        logItem?.submenu?.delegate = self
+        shotItem = menu.addItem(withTitle: "Take screenshot", action: nil, keyEquivalent: "")
+        shotItem?.submenu = NSMenu()
+        shotItem?.submenu?.delegate = self
+        screenshotMenu = shotItem?.submenu
         menu.addItem(.separator())
         loginItem = menu.addItem(withTitle: "Launch at login", action: #selector(toggleLaunchAtLogin), keyEquivalent: "")
         menu.delegate = self
+        // Manual enabling, so device items can be disabled when nothing is connected.
+        menu.autoenablesItems = false
         menu.addItem(withTitle: "Quit", action: #selector(NSApplication.terminate(_:)), keyEquivalent: "q")
+        // macOS 26 gives Quit an icon on its own: give every item one so the titles line up.
+        let icons = ["Install APK…": "square.and.arrow.down", "Show window": "macwindow",
+                     "Capture log": "doc.text", "Take screenshot": "camera",
+                     "Launch at login": "power", "Quit": "xmark.square"]
+        for item in menu.items {
+            if let name = icons[item.title] {
+                item.image = NSImage(systemSymbolName: name, accessibilityDescription: nil)
+            }
+        }
         statusItem.menu = menu
 
         statusWindow.onPush = { [weak self] in self?.install() }
@@ -477,12 +488,29 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate {
 
     let logRanges = [1, 2, 3, 4, 5, 10, 15, 30]
     var screenshotMenu: NSMenu?
+    var shotItem: NSMenuItem?
+    var logItem: NSMenuItem?
     var loginItem: NSMenuItem?
 
     func menuNeedsUpdate(_ menu: NSMenu) {
-        // Main menu: only refresh the login checkmark.
+        // Main menu: refresh the login checkmark, disable device items when
+        // nothing is connected, and with a single device "Take screenshot"
+        // shoots directly instead of opening a device submenu.
         if menu === statusItem.menu {
             loginItem?.state = SMAppService.mainApp.status == .enabled ? .on : .off
+            let devices = findAdb().map(connectedDevices) ?? []
+            logItem?.isEnabled = !devices.isEmpty
+            shotItem?.isEnabled = !devices.isEmpty
+            if devices.count == 1 {
+                shotItem?.submenu = nil
+                shotItem?.action = #selector(takeScreenshot(_:))
+                shotItem?.target = self
+                shotItem?.representedObject = devices[0]
+            } else {
+                shotItem?.action = nil
+                shotItem?.representedObject = nil
+                shotItem?.submenu = screenshotMenu
+            }
             return
         }
         menu.removeAllItems()
@@ -563,7 +591,6 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate {
                     return
                 }
                 self.flash("📸")
-                NSWorkspace.shared.activateFileViewerSelecting([file])
             }
         }
     }
