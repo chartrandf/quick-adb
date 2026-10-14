@@ -61,6 +61,10 @@ func findAapt2() -> String? {
     return firstExecutable(["/opt/homebrew/bin/aapt2", "/usr/local/bin/aapt2"])
 }
 
+func findScrcpy() -> String? {
+    firstExecutable(["/opt/homebrew/bin/scrcpy", "/usr/local/bin/scrcpy"])
+}
+
 func packageName(of apk: URL) -> String? {
     if let aapt2 = findAapt2() {
         let r = run(aapt2, ["dump", "packagename", apk.path])
@@ -77,7 +81,9 @@ struct Device {
     let serial: String
     let name: String // e.g. "Google Pixel 8a"
     var slug: String { name.lowercased().replacingOccurrences(of: " ", with: "-") }
+    var isEmulator: Bool { serial.hasPrefix("emulator-") }
 }
+
 
 // `adb devices -l` gives the model; the manufacturer needs a getprop.
 func connectedDevices(adb: String) -> [Device] {
@@ -403,6 +409,10 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate {
         shotItem?.submenu = NSMenu()
         shotItem?.submenu?.delegate = self
         screenshotMenu = shotItem?.submenu
+        mirrorItem = menu.addItem(withTitle: "Mirror screen", action: nil, keyEquivalent: "")
+        mirrorItem?.submenu = NSMenu()
+        mirrorItem?.submenu?.delegate = self
+        mirrorMenu = mirrorItem?.submenu
         menu.addItem(.separator())
         loginItem = menu.addItem(withTitle: "Launch at login", action: #selector(toggleLaunchAtLogin), keyEquivalent: "")
         menu.delegate = self
@@ -411,7 +421,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate {
         menu.addItem(withTitle: "Quit", action: #selector(NSApplication.terminate(_:)), keyEquivalent: "q")
         // macOS 26 gives Quit an icon on its own: give every item one so the titles line up.
         let icons = ["Install APK…": "square.and.arrow.down", "Show window": "macwindow",
-                     "Capture log": "doc.text", "Take screenshot": "camera",
+                     "Capture log": "doc.text", "Take screenshot": "camera", "Mirror screen": "rectangle.on.rectangle",
                      "Launch at login": "power", "Quit": "xmark.square"]
         for item in menu.items {
             if let name = icons[item.title] {
@@ -489,6 +499,8 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate {
     let logRanges = [1, 2, 3, 4, 5, 10, 15, 30]
     var screenshotMenu: NSMenu?
     var shotItem: NSMenuItem?
+    var mirrorMenu: NSMenu?
+    var mirrorItem: NSMenuItem?
     var logItem: NSMenuItem?
     var loginItem: NSMenuItem?
 
@@ -511,6 +523,19 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate {
                 shotItem?.representedObject = nil
                 shotItem?.submenu = screenshotMenu
             }
+            // scrcpy can't mirror an emulator: hide the item unless a real phone is there.
+            let phones = devices.filter { !$0.isEmulator }
+            mirrorItem?.isHidden = findScrcpy() == nil || phones.isEmpty
+            if phones.count == 1 {
+                mirrorItem?.submenu = nil
+                mirrorItem?.action = #selector(mirrorScreen(_:))
+                mirrorItem?.target = self
+                mirrorItem?.representedObject = phones[0]
+            } else {
+                mirrorItem?.action = nil
+                mirrorItem?.representedObject = nil
+                mirrorItem?.submenu = mirrorMenu
+            }
             return
         }
         menu.removeAllItems()
@@ -519,9 +544,12 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate {
             menu.addItem(withTitle: "No device connected", action: nil, keyEquivalent: "")
             return
         }
-        if menu === screenshotMenu {
-            for device in devices {
-                let item = menu.addItem(withTitle: device.name, action: #selector(takeScreenshot(_:)), keyEquivalent: "")
+        if menu === screenshotMenu || menu === mirrorMenu {
+            let mirror = menu === mirrorMenu
+            for device in devices where !(mirror && device.isEmulator) {
+                let item = menu.addItem(withTitle: device.name,
+                                        action: mirror ? #selector(mirrorScreen(_:)) : #selector(takeScreenshot(_:)),
+                                        keyEquivalent: "")
                 item.target = self
                 item.representedObject = device
             }
@@ -593,6 +621,44 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate {
                 self.flash("📸")
             }
         }
+    }
+
+    // Runs scrcpy --stay-awake in the background: closing its window ends it.
+    // On a failed exit, its output shows in the window.
+    @objc func mirrorScreen(_ item: NSMenuItem) {
+        guard let device = item.representedObject as? Device, let scrcpy = findScrcpy() else { return }
+        let p = Process()
+        p.executableURL = URL(fileURLWithPath: scrcpy)
+        p.arguments = ["-s", device.serial, "--stay-awake"]
+        // scrcpy looks for adb in PATH, which a GUI app doesn't have.
+        var env = ProcessInfo.processInfo.environment
+        if let adb = findAdb() { env["ADB"] = adb }
+        p.environment = env
+        let pipe = Pipe()
+        p.standardOutput = pipe
+        p.standardError = pipe
+        var output = Data()
+        let lock = NSLock()
+        // Drain the pipe as it goes, or scrcpy blocks once it is full.
+        pipe.fileHandleForReading.readabilityHandler = { handle in
+            let chunk = handle.availableData
+            lock.lock(); output.append(chunk); lock.unlock()
+        }
+        let fail: (String) -> Void = { text in
+            DispatchQueue.main.async {
+                self.statusWindow.clearLog()
+                self.statusWindow.log(text)
+                self.statusWindow.file = nil
+                self.statusWindow.package = nil
+                self.statusWindow.show(.failure, "Mirror failed")
+            }
+        }
+        p.terminationHandler = { proc in
+            pipe.fileHandleForReading.readabilityHandler = nil
+            lock.lock(); let text = String(decoding: output, as: UTF8.self); lock.unlock()
+            if proc.terminationStatus != 0 { fail(text.trimmingCharacters(in: .whitespacesAndNewlines)) }
+        }
+        do { try p.run() } catch { fail("\(error)") }
     }
 
     @objc func toggleLaunchAtLogin() {

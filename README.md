@@ -17,6 +17,7 @@ A tiny macOS menu bar app to push APKs to an Android phone. Drop an APK on the a
 - **No device?** The window asks you to connect one and keeps the APK; hit **Push to device** when it's plugged in.
 - **Capture log**: saves the last 1, 2, 3, 4, 5, 10, 15 or 30 minutes of `logcat` to the Desktop.
 - **Take screenshot**: saves the phone screen as a PNG on the Desktop.
+- **Mirror screen**: opens the phone screen with `scrcpy --stay-awake`, no terminal. Close the window to stop it. Shown only when `scrcpy` is installed and a real phone (not an emulator) is connected.
 - Devices show by name (e.g. *Google Pixel 8a*), not by serial.
 
 
@@ -28,6 +29,7 @@ A tiny macOS menu bar app to push APKs to an Android phone. Drop an APK on the a
 | Show window | Reopen the window with the last result |
 | Capture log → *Last N min* | `adb logcat -d -t <since>` → `~/Desktop/<device>-<date>.log` |
 | Take screenshot → *device* | `adb exec-out screencap -p` → `~/Desktop/<device>-<date>.png` |
+| Mirror screen → *device* | `scrcpy -s <serial> --stay-awake`; errors show in the window |
 | Launch at login | Start Quick ADB when you log in (checkmark when on) |
 | Quit | |
 
@@ -37,6 +39,7 @@ A tiny macOS menu bar app to push APKs to an Android phone. Drop an APK on the a
 - `adb` (Homebrew `android-platform-tools`, or the Android SDK `platform-tools`)
 - `aapt2` from the Android SDK `build-tools` (or `apkanalyzer`) to read the package name
 - USB debugging enabled on the phone
+- Optional: `scrcpy` (`brew install scrcpy`) for *Mirror screen*
 
 Tools are looked up in `/opt/homebrew/bin`, `/usr/local/bin`, `$ANDROID_HOME` and `~/Library/Android/sdk`.
 
