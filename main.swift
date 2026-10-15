@@ -444,11 +444,39 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate {
         return false
     }
 
+    // Green dot on the ant after a successful install, until the menu or window is opened.
+    var installedBadge = false {
+        didSet { setIcon(filled: false) }
+    }
+
     // Highlight the button while an APK is dragged over it.
     func setIcon(filled: Bool) {
         statusItem.button?.title = ""
-        statusItem.button?.image = NSImage(systemSymbolName: "ant.fill", accessibilityDescription: "Quick ADB")
+        statusItem.button?.image = installedBadge ? badgedAnt() : NSImage(systemSymbolName: "ant.fill", accessibilityDescription: "Quick ADB")
         statusItem.button?.highlight(filled)
+    }
+
+    // A colored dot can't be a template image, so tint the ant by hand.
+    // The handler runs at draw time, so labelColor follows the menu bar appearance.
+    func badgedAnt() -> NSImage? {
+        guard let ant = NSImage(systemSymbolName: "ant.fill", accessibilityDescription: "Quick ADB, installed") else { return nil }
+        let size = ant.size
+        let image = NSImage(size: size, flipped: false) { rect in
+            ant.draw(in: rect)
+            NSColor.labelColor.set()
+            rect.fill(using: .sourceAtop)
+            let d: CGFloat = 6
+            let dot = NSRect(x: rect.maxX - d, y: rect.maxY - d, width: d, height: d)
+            // Clear a ring around the dot so it stands out from the ant.
+            NSGraphicsContext.current?.compositingOperation = .clear
+            NSBezierPath(ovalIn: dot.insetBy(dx: -1, dy: -1)).fill()
+            NSGraphicsContext.current?.compositingOperation = .sourceOver
+            NSColor.systemGreen.set()
+            NSBezierPath(ovalIn: dot).fill()
+            return true
+        }
+        image.accessibilityDescription = ant.accessibilityDescription
+        return image
     }
 
     // Shows a ✅ (or ❌) in the menu bar for a few seconds.
@@ -491,6 +519,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate {
     }
 
     @objc func showWindow() {
+        installedBadge = false
         statusWindow.show(statusWindow.state, statusWindow.title, pushEnabled: pendingApk != nil)
     }
 
@@ -509,6 +538,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate {
         // nothing is connected, and with a single device "Take screenshot"
         // shoots directly instead of opening a device submenu.
         if menu === statusItem.menu {
+            installedBadge = false
             loginItem?.state = SMAppService.mainApp.status == .enabled ? .on : .off
             let devices = findAdb().map(connectedDevices) ?? []
             logItem?.isEnabled = !devices.isEmpty
@@ -682,6 +712,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate {
     func install() {
         guard let apk = pendingApk, !busy else { return }
         busy = true
+        installedBadge = false
         statusWindow.clearLog()
         statusWindow.file = apk
         statusWindow.package = nil
@@ -783,7 +814,10 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate {
                 ui { self.flash("❌") }
                 return finish(.failure, "Install failed")
             }
-            ui { self.flash("✅") }
+            ui {
+                NSSound(named: "Blow")?.play()
+                self.installedBadge = true
+            }
             finish(.success, devices.count == 1 ? "Installed on \(devices[0].name)" : "Installed on \(devices.count) devices")
         }
     }
